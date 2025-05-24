@@ -10,18 +10,18 @@ import cv2
 se1 = disk(3)
 se2 = np.array([[1], [0], [1]], dtype=bool)
 
-# def preprocess_clahe(img):
-#     # Appliquer CLAHE (Contrast Limited Adaptive Histogram Equalization)
-#     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-#     img_clahe = clahe.apply(img)
-#     return img_clahe
+def preprocess_clahe(img):
+    # Appliquer CLAHE (Contrast Limited Adaptive Histogram Equalization)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    img_clahe = clahe.apply(img)
+    return img_clahe
 
 def my_segmentation(img, img_mask, seuil):
     # # Étape 1 : prétraitement CLAHE
-    # img_clahe = preprocess_clahe(img)
+    img_clahe = preprocess_clahe(img)
 
     # Étape 2 : filtre de Frangi sur image normalisée
-    img_float = img_as_float(img)
+    img_float = img_as_float(img_clahe)
     vessels = frangi(img_float, sigmas=range(1, 5), scale_step=1)
 
     # Étape 3 : seuillage sur la sortie Frangi
@@ -33,7 +33,7 @@ def my_segmentation(img, img_mask, seuil):
     imClean = remove_small_objects(imPts1Visoles, min_size=100)
 
     # Appliquer le masque du fond d’œil
-    img_out = img_mask & imPts1Visoles
+    img_out = img_mask & imClean
 
     return img_out
 
@@ -70,62 +70,114 @@ def find_best_threshold(img, img_mask, img_GT, seuils=np.linspace(0.001, 0.05, 5
 
     print(f"Meilleur seuil (F1) = {best_seuil:.4f}, Precision = {Precision_list[np.argmax(F1_list)]:.3f}, Recall = {Recall_list[np.argmax(F1_list)]:.3f}, F1 = {best_score:.3f}")
 
-    return best_out, best_seuil, Precision_list, Recall_list, F1_list
+    return best_out, best_score, best_seuil, Precision_list, Recall_list, F1_list
 
 def ROC(Precision, Recall):
+    Ref=[]
+    X=np.linspace(0,1,len(Recall))
+    for x in X:
+        Ref.append(1-x)
     plt.plot(Recall, Precision, label="Courbe Precision-Recall")
+    plt.plot(X, Ref, '--')
     plt.title("Courbe Precision-Recall")
     plt.xlabel("Recall")
     plt.ylabel("Precision")
     plt.legend()
     plt.show()
 
-# --- Chargement image et vérité terrain ---
-img = np.asarray(Image.open('./images_IOSTAR/star01_OSC.jpg').convert('L')).astype(np.uint8)
-print(f"Image shape: {img.shape}")
 
-nrows, ncols = img.shape
-row, col = np.ogrid[:nrows, :ncols]
-img_mask = np.ones(img.shape, dtype=bool)
-invalid_pixels = ((row - nrows / 2) ** 2 + (col - ncols / 2) ** 2 > (nrows / 2) ** 2)
-img_mask[invalid_pixels] = 0
+# --- Liste des images de travail ---
 
-img_GT = np.asarray(Image.open('./images_IOSTAR/GT_01.png').convert('L')).astype(np.uint8)
-img_GT = img_GT > 0  # binariser GT
+Img_tests=['./images_IOSTAR/star01_OSC.jpg',
+           './images_IOSTAR/star02_OSC.jpg',
+           './images_IOSTAR/star03_OSN.jpg',
+           './images_IOSTAR/star08_OSN.jpg',
+           './images_IOSTAR/star21_OSC.jpg',
+           './images_IOSTAR/star26_ODC.jpg',
+           './images_IOSTAR/star28_ODN.jpg',
+           './images_IOSTAR/star32_ODC.jpg',
+           './images_IOSTAR/star37_ODN.jpg',
+           './images_IOSTAR/star48_OSN.jpg']
 
-# Trouver le meilleur seuil (max F1)
-img_out, best_seuil, Precision_list, Recall_list, F1_list = find_best_threshold(img, img_mask, img_GT)
+Img_verite=['./images_IOSTAR/GT_01.png',
+            './images_IOSTAR/GT_02.png',
+            './images_IOSTAR/GT_03.png',
+            './images_IOSTAR/GT_08.png',
+            './images_IOSTAR/GT_21.png',
+            './images_IOSTAR/GT_26.png',
+            './images_IOSTAR/GT_28.png',
+            './images_IOSTAR/GT_32.png',
+            './images_IOSTAR/GT_37.png',
+            './images_IOSTAR/GT_48.png']
 
-# Sauvegarde et affichage
-cv2.imwrite('./images_IOSTAR/segmentation_frangi_f1.png', (img_out.astype(np.uint8) * 255))
+Img_result=['./images_IOSTAR/segmentation_01.png',
+            './images_IOSTAR/segmentation_02.png',
+            './images_IOSTAR/segmentation_03.png',
+            './images_IOSTAR/segmentation_08.png',
+            './images_IOSTAR/segmentation_21.png',
+            './images_IOSTAR/segmentation_26.png',
+            './images_IOSTAR/segmentation_28.png',
+            './images_IOSTAR/segmentation_32.png',
+            './images_IOSTAR/segmentation_37.png',
+            './images_IOSTAR/segmentation_48.png']
 
-plt.subplot(231)
-plt.imshow(img, cmap='gray')
-plt.title('Image Originale')
-plt.axis('off')
 
-plt.subplot(232)
-plt.imshow(img_out, cmap='gray')
-plt.title(f'Segmentation (Frangi, seuil={best_seuil:.4f})')
-plt.axis('off')
+# --- Segmentation sur une base de 10 images ---
 
-plt.subplot(233)
-plt.imshow(skeletonize(img_out), cmap='gray')
-plt.title('Segmentation Squelette')
-plt.axis('off')
+# Liste des f1 scores de chaque image
+Scores=[]
 
-plt.subplot(235)
-plt.imshow(img_GT, cmap='gray')
-plt.title('Vérité Terrain')
-plt.axis('off')
+for i in range(len(Img_tests)):
 
-plt.subplot(236)
-plt.imshow(skeletonize(img_GT), cmap='gray')
-plt.title('Vérité Terrain Squelette')
-plt.axis('off')
+    # --- Chargement image et vérité terrain ---
+    img = np.asarray(Image.open(Img_tests[i]).convert('L')).astype(np.uint8)
+    print(f"Image shape: {img.shape}")
 
-plt.tight_layout()
-plt.show()
+    nrows, ncols = img.shape
+    row, col = np.ogrid[:nrows, :ncols]
+    img_mask = np.ones(img.shape, dtype=bool)
+    invalid_pixels = ((row - nrows / 2) ** 2 + (col - ncols / 2) ** 2 > (nrows / 2) ** 2)
+    img_mask[invalid_pixels] = 0
 
-# Tracer la courbe Precision-Recall
-ROC(Precision_list, Recall_list)
+    img_GT = np.asarray(Image.open(Img_verite[i]).convert('L')).astype(np.uint8)
+    img_GT = img_GT > 0  # binariser GT
+
+    # Trouver le meilleur seuil (max F1)
+    img_out, best_score, best_seuil, Precision_list, Recall_list, F1_list = find_best_threshold(img, img_mask, img_GT)
+    Scores.append(best_score)
+
+    # Sauvegarde et affichage
+    cv2.imwrite(Img_result[i], (img_out.astype(np.uint8) * 255))
+
+    plt.subplot(231)
+    plt.imshow(img, cmap='gray')
+    plt.title('Image Originale')
+    plt.axis('off')
+
+    plt.subplot(232)
+    plt.imshow(img_out, cmap='gray')
+    plt.title(f'Segmentation (Frangi, seuil={best_seuil:.4f})')
+    plt.axis('off')
+
+    plt.subplot(233)
+    plt.imshow(skeletonize(img_out), cmap='gray')
+    plt.title('Segmentation Squelette')
+    plt.axis('off')
+
+    plt.subplot(235)
+    plt.imshow(img_GT, cmap='gray')
+    plt.title('Vérité Terrain')
+    plt.axis('off')
+
+    plt.subplot(236)
+    plt.imshow(skeletonize(img_GT), cmap='gray')
+    plt.title('Vérité Terrain Squelette')
+    plt.axis('off')
+
+    plt.tight_layout()
+    plt.show()
+
+    # Tracer la courbe Precision-Recall
+    ROC(Precision_list, Recall_list)
+
+print(f"Score F1 moyen = {np.mean(Scores):.4f}")
