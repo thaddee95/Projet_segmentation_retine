@@ -1,14 +1,16 @@
 import numpy as np
 from skimage.morphology import erosion, dilation, disk, skeletonize, remove_small_objects
-from skimage.filters import frangi
+from skimage.filters import frangi,sato
 from skimage import img_as_float
 from PIL import Image
 from matplotlib import pyplot as plt
 import cv2
 
+
 # Éléments structurants
 se1 = disk(3)
 se2 = np.array([[1], [0], [1]], dtype=bool)
+se3 = disk(2)
 
 def preprocess_clahe(img):
     # Appliquer CLAHE (Contrast Limited Adaptive Histogram Equalization)
@@ -20,11 +22,11 @@ def my_segmentation(img, img_mask, seuil):
     # # Étape 1 : prétraitement CLAHE
     img_clahe = preprocess_clahe(img)
 
-    # Étape 2 : filtre de Frangi sur image normalisée
+    # Étape 2 : filtre de Sato sur image normalisée
     img_float = img_as_float(img_clahe)
-    vessels = frangi(img_float, sigmas=range(1, 5), scale_step=1)
+    vessels = sato(img_float, sigmas=range(1, 3))
 
-    # Étape 3 : seuillage sur la sortie Frangi
+    # Étape 3 : seuillage sur la sortie Sato
     imBin = vessels > seuil
 
     # Étape 4 : nettoyage morphologique
@@ -34,6 +36,9 @@ def my_segmentation(img, img_mask, seuil):
 
     # Appliquer le masque du fond d’œil
     img_out = img_mask & imClean
+
+    # Fermeture pour faire disparaître les petites structures blanches
+    img_out = erosion(dilation(img_out, se3))
 
     return img_out
 
@@ -156,7 +161,7 @@ for i in range(len(Img_tests)):
 
     plt.subplot(232)
     plt.imshow(img_out, cmap='gray')
-    plt.title(f'Segmentation (Frangi, seuil={best_seuil:.4f})')
+    plt.title(f'Segmentation (Sato, seuil={best_seuil:.4f})')
     plt.axis('off')
 
     plt.subplot(233)
