@@ -1,3 +1,6 @@
+# (Pipeline principal avec segmentation Frangi, recherche du meilleur seuil, et visualisation des étapes)
+# Ce fichier contient le pipeline principal pour la segmentation des vaisseaux rétiniens. Il inclut la recherche du meilleur seuil Frangi, l'évaluation des performances (précision, rappel, F1-score), et la visualisation étape par étape des résultats intermédiaires. Il sauvegarde également les résultats et trace des courbes Precision-Recall.
+
 import numpy as np
 from skimage.morphology import erosion, disk, skeletonize, remove_small_objects
 from skimage.filters import frangi
