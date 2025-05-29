@@ -1,0 +1,4 @@
+Best threshold: 0.05000
+Precision: 0.564
+Recall: 0.600
+F1-score: 0.582
