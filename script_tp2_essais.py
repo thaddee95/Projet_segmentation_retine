@@ -54,28 +54,48 @@ def evaluate(img_out, img_GT):
     return precision, recall, f1
 
 def find_best_threshold(img, img_mask, img_GT, seuils=np.linspace(0.001, 0.05, 50)):
-    best_score = -1
+    best_f1_score = -1
     best_seuil = 0
-    best_out = None
+    best_output = None
     Precision_list = []
     Recall_list = []
     F1_list = []
 
     for seuil in seuils:
-        img_out = my_segmentation(img, img_mask, seuil)
-        precision, recall, f1 = evaluate(img_out, img_GT)
-        Precision_list.append(precision)
-        Recall_list.append(recall)
-        F1_list.append(f1)
+        try:
+            # Application de la segmentation
+            img_out = my_segmentation(img, img_mask, seuil)
 
-        if f1 > best_score:
-            best_score = f1
-            best_seuil = seuil
-            best_out = img_out
+            # Évaluation des performances
+            precision, recall, f1 = evaluate(img_out, img_GT)
 
-    print(f"Meilleur seuil (F1) = {best_seuil:.4f}, Precision = {Precision_list[np.argmax(F1_list)]:.3f}, Recall = {Recall_list[np.argmax(F1_list)]:.3f}, F1 = {best_score:.3f}")
+            # Sauvegarde des scores
+            Precision_list.append(precision)
+            Recall_list.append(recall)
+            F1_list.append(f1)
 
-    return best_out, best_score, best_seuil, Precision_list, Recall_list, F1_list
+            # Mise à jour du meilleur score si nécessaire
+            if f1 > best_f1_score:
+                best_f1_score = f1
+                best_seuil = seuil
+                best_output = img_out
+
+        except Exception as e:
+            print(f"Erreur avec seuil={seuil:.4f} : {e}")
+            Precision_list.append(0)
+            Recall_list.append(0)
+            F1_list.append(0)
+
+    # Trouver l'indice du meilleur seuil
+    best_idx = np.argmax(F1_list)
+
+    print(f"Meilleur seuil (F1) = {seuils[best_idx]:.4f}, "
+          f"Précision = {Precision_list[best_idx]:.3f}, "
+          f"Rappel = {Recall_list[best_idx]:.3f}, "
+          f"F1 = {F1_list[best_idx]:.3f}")
+
+    return best_output, best_f1_score, best_seuil, Precision_list, Recall_list, F1_list
+
 
 def ROC(Precision, Recall):
     Ref=[]
