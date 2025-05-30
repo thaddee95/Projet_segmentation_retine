@@ -1,4 +1,0 @@
-Meilleur seuil : 0.03806
-Précision : 0.698
-Rappel : 0.627
-F1-score : 0.660
