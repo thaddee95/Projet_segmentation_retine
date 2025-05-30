@@ -146,6 +146,5 @@ def plot_results(data, gt_path):
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     plt.show()
 
-# Exemple d'appel (modifie les chemins si besoin)
 data = my_segmentation3('./images_IOSTAR/star01_OSC.jpg')
 plot_results(data, './images_IOSTAR/GT_01.png')
