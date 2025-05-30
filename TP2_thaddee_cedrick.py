@@ -1,5 +1,5 @@
 import numpy as np
-from skimage.morphology import erosion, dilation, disk, skeletonize, remove_small_objects
+from skimage.morphology import erosion, dilation, disk, skeletonize, remove_small_objects, reconstruction, square
 from skimage.filters import frangi,sato
 from skimage import img_as_float
 from PIL import Image
@@ -11,6 +11,7 @@ import cv2
 se1 = disk(3)
 se2 = np.array([[1], [0], [1]], dtype=bool)
 se3 = disk(2)
+sec=square(5)
 
 def preprocess_clahe(img):
     # Appliquer CLAHE (Contrast Limited Adaptive Histogram Equalization)
@@ -21,8 +22,8 @@ def preprocess_clahe(img):
 def my_segmentation1(img, img_mask, seuil):
 
     # Contraste pour mieux faire ressortir les vaisseaux
-    imEro = erosion(img, se1)
-    imDil = dilation(img, se1)
+    imEro = erosion(img, sec)
+    imDil = dilation(img, sec)
     imMask = ((imDil - img) < (img - imEro)) 
     imContraste = imMask*imDil + ~imMask*imEro
 
@@ -46,12 +47,13 @@ def my_segmentation1(img, img_mask, seuil):
     imNivel = imFASmask*imFASsup_reco + ~imFASmask*imFASinf_reco  # Recombinaison
 
     # Extraction des vaisseaux (gradient ou laplacien)
-    imDil = dilation(imNivel,se1) # Dilatation morphologique
-    imEro = erosion(imNivel, se1)
+    imDil = dilation(imNivel,sec) # Dilatation morphologique
+    imEro = erosion(imNivel, sec)
+    # Gradient :
     imgradient=imDil-imEro
     # Laplacien : 
     # A=2*np.asarray(imContraste).astype(np.int16)
-    # laplacien=imDil2.astype(np.int16)+imEro2.astype(np.int16)-A
+    # laplacien=imDil.astype(np.int16)+imEro.astype(np.int16)-A
 
     # Seuillage pour obtenir une image binaire
     imBin=imgradient > seuil
@@ -69,11 +71,14 @@ def my_segmentation2(img, img_mask, seuil):
     # # Étape 1 : prétraitement CLAHE
     img_clahe = preprocess_clahe(img)
 
-    # Étape 2 : filtre de Sato sur image normalisée
+    # Étape 2 : filtre vasculaire sur image normalisée
     img_float = img_as_float(img_clahe)
-    vessels = sato(img_float, sigmas=range(1, 3))
+    # Filtre de Sato
+    #vessels = sato(img_float, sigmas=range(1, 3))
+    # Filtre de Frangi
+    vessels = frangi(img_float, sigmas=range(1, 5), scale_step=1)
 
-    # Étape 3 : seuillage sur la sortie Sato
+    # Étape 3 : seuillage sur la sortie du filtre
     imBin = vessels > seuil
 
     # Étape 4 : nettoyage morphologique
@@ -89,7 +94,7 @@ def my_segmentation2(img, img_mask, seuil):
 
     return img_out
 
-def evaluate(img_out, img_GT):
+def evaluate1(img_out, img_GT):
     # Fonction d'évaluation
 
     GT_skel = skeletonize(img_GT) # On reduit le support de l'evaluation...
@@ -101,7 +106,7 @@ def evaluate(img_out, img_GT):
     precision = TP / (TP + FP) if (TP + FP) > 0 else 0
     recall = TP / (TP + FN) if (TP + FN) > 0 else 0
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-    return precision, recall, f1, img_out_skel, GT_skel
+    return precision, recall, f1
 
 def evaluate2(img_out, img_GT):
     GT_bin = img_GT > 0
@@ -115,6 +120,9 @@ def evaluate2(img_out, img_GT):
     return precision, recall, f1
 
 def find_best_threshold(img, img_mask, img_GT, seuils=np.linspace(0.001, 0.05, 50)):
+    # Si la 1ère segmentation est utilisée, remplacer seuils par np.linspace(0,40,50)
+    # Si la 2ème segmentation est utilisée, remplacer seuils par np.linspace(0.001, 0.05, 50)
+
     best_f1_score = -1
     best_seuil = 0
     best_output = None
@@ -157,7 +165,7 @@ def find_best_threshold(img, img_mask, img_GT, seuils=np.linspace(0.001, 0.05, 5
 
     return best_output, best_f1_score, best_seuil, Precision_list, Recall_list, F1_list
 
-def ROC(Precision, Recall):
+def PR(Precision, Recall):
     Ref=[]
     X=np.linspace(0,1,len(Recall))
     for x in X:
@@ -232,7 +240,7 @@ for i in range(len(Img_tests)):
     Scores.append(best_score)
 
     # Sauvegarde et affichage
-    # cv2.imwrite(Img_result[i], (img_out.astype(np.uint8) * 255))
+    cv2.imwrite(Img_result[i], (img_out.astype(np.uint8) * 255))
 
     plt.subplot(231)
     plt.imshow(img, cmap='gray')
@@ -241,7 +249,7 @@ for i in range(len(Img_tests)):
 
     plt.subplot(232)
     plt.imshow(img_out, cmap='gray')
-    plt.title(f'Segmentation (Sato, seuil={best_seuil:.4f})')
+    plt.title(f'Segmentation')
     plt.axis('off')
 
     plt.subplot(233)
@@ -263,6 +271,6 @@ for i in range(len(Img_tests)):
     plt.show()
 
     # Tracer la courbe Precision-Recall
-    ROC(Precision_list, Recall_list)
+    PR(Precision_list, Recall_list)
 
 print(f"Score F1 moyen = {np.mean(Scores):.4f}")
